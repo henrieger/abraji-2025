@@ -1,5 +1,6 @@
 from fastapi import Depends, FastAPI, HTTPException, Header
 from pydantic import BaseModel
+from base64 import b64decode, b64decode, b64encode
 import pandas as pd
 
 app = FastAPI()
@@ -10,21 +11,21 @@ class LoginData(BaseModel):
     password: str
 
 
-def check_auth(authentication: str = Header()):
+def check_auth(authentication: str = Header()) -> None:
     auth_data = authentication.replace("token:", "")
     try:
-        user, password = auth_data.split("|", 2)
+        user, encoded_password = auth_data.split("|", 2)
     except ValueError:
         raise HTTPException(422, "Header inválido")
 
     logins = pd.read_csv("logins.csv", index_col="user")
 
     try:
-        register_password = logins.loc[user]["password"]
+        password = logins.loc[user]["password"]
     except KeyError:
         raise HTTPException(401, f"Token inválido - Usuário {user} não existe")
 
-    if password != register_password:
+    if b64decode(encoded_password.encode()) != password.encode():
         raise HTTPException(401, "Token inválido - Senha incorreta")
 
 
@@ -46,7 +47,7 @@ def tramites(
     termo: str | None = None,
     orgao: str | None = None,
     autor: str | None = None,
-    login=Depends(check_auth),
+    login: None = Depends(check_auth),
 ) -> dict:
     """Retorna todos os tramites que correspondem aos termos de busca fornecidos"""
     df: pd.DataFrame = pd.read_csv("data.csv")
@@ -83,6 +84,10 @@ def termos() -> dict:
     return {"termos": list(termos)}
 
 
+def generate_token(user: str, password: str) -> str:
+    return f"token:{user}|{b64encode(password.encode()).decode()}"
+
+
 @app.post("/login")
 def login(data: LoginData) -> dict:
     login_df: pd.DataFrame = pd.read_csv("logins.csv", index_col="user")
@@ -95,4 +100,4 @@ def login(data: LoginData) -> dict:
     if password != data.password:
         raise HTTPException(401, "Senha incorreta")
 
-    return {"token": f"token:{data.user}|{data.password}"}
+    return {"token": generate_token(data.user, data.password)}
