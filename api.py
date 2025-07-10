@@ -1,5 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header
-from fastapi.requests import Request
+from fastapi import Depends, FastAPI, HTTPException, Header
 from pydantic import BaseModel
 import pandas as pd
 
@@ -11,24 +10,22 @@ class LoginData(BaseModel):
     password: str
 
 
-def check_auth(request: Request, authentication: str = Header()):
+def check_auth(authentication: str = Header()):
     auth_data = authentication.replace("token:", "")
     try:
         user, password = auth_data.split("|", 2)
     except ValueError:
         raise HTTPException(422, "Header inválido")
 
-    logins = pd.read_csv("logins.csv")
+    logins = pd.read_csv("logins.csv", index_col="user")
 
     try:
         register_password = logins.loc[user]["password"]
     except KeyError:
-        raise HTTPException(403, "Token inválido")
+        raise HTTPException(401, f"Token inválido - Usuário {user} não existe")
 
     if password != register_password:
-        raise HTTPException(403, "Token inválido")
-
-    return request.body()
+        raise HTTPException(401, "Token inválido - Senha incorreta")
 
 
 @app.get("/")
@@ -46,7 +43,10 @@ def filter_df_by(df: pd.DataFrame, key: str, value: str | None) -> pd.DataFrame:
 
 @app.get("/tramites")
 def tramites(
-    termo: str | None = None, orgao: str | None = None, autor: str | None = None
+    termo: str | None = None,
+    orgao: str | None = None,
+    autor: str | None = None,
+    login=Depends(check_auth),
 ) -> dict:
     """Retorna todos os tramites que correspondem aos termos de busca fornecidos"""
     df: pd.DataFrame = pd.read_csv("data.csv")
