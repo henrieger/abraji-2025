@@ -35,8 +35,8 @@ async def busca(
     if orgao is not None:
         filter_df = filter_df[filter_df["orgao"] == orgao]
     if texto is not None:
-        filter_df = filter_df[texto in filter_df["texto"]]
-    return df.to_dict(orient="records")
+        filter_df = filter_df[filter_df["texto"].str.contains(texto)]
+    return filter_df.to_dict(orient="records")
 
 
 @app.get("/orgaos")
